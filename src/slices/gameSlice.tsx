@@ -6,7 +6,9 @@ import { parseFen, makeFen } from 'chessops/fen';
 import { Chess } from 'chessops/chess';
 import { parsePgn } from 'chessops/pgn';
 import { parseSan, makeSan } from 'chessops/san';
-import { makeUci, parseUci } from 'chessops/util';
+import { makeUci, parseUci, Uci } from 'chessops/util';
+
+type HistoryEntry = { move: Uci; san: string };
 
 const initialState: Game = {
   "moves": "",
@@ -14,7 +16,8 @@ const initialState: Game = {
   "start": START_FEN,
   "lastMove": "",
   "greedy": false,
-  "fromOpponent": false
+  "fromOpponent": false,
+  "error": null
 };
 
 const gameSlice = createSlice({
@@ -45,6 +48,9 @@ const gameSlice = createSlice({
     gameResetLastMove(state) {
       state.lastMove = initialState.lastMove;
     },
+    gameSetError(state, action) {
+      state.error = action.payload;
+    },
     gameUpdate(state, action) {
       const newState: Game = {
         "start": state.start,
@@ -52,7 +58,8 @@ const gameSlice = createSlice({
         "fen": action.payload.fen,
         "lastMove": action.payload.lastMove,
         "greedy": action.payload.greedy,
-        "fromOpponent": action.payload.fromOpponent
+        "fromOpponent": action.payload.fromOpponent ?? false,
+        "error": action.payload.error ?? null
       }
       return newState
     }
@@ -60,18 +67,17 @@ const gameSlice = createSlice({
 })
 
 const getMovesFromPgn = (pos: any, startFen: string) => {
-  // Simple mainline PGN generator for chessops
   const setup = parseFen(startFen).unwrap();
   const tempPos = Chess.fromSetup(setup).unwrap();
-  const history = pos.history || []; // We'll need to attach history to our chessops board objects
+  const history = pos.history as HistoryEntry[] || [];
 
   let pgn = "";
-  history.forEach((move: any) => {
+  history.forEach((entry: HistoryEntry) => {
     if (tempPos.turn === 'white') {
       pgn += `${tempPos.fullmoves}. `;
     }
-    pgn += `${move.san} `;
-    tempPos.play(move);
+    pgn += `${entry.san} `;
+    tempPos.play(entry.move);
   });
   return pgn.trim();
 }
@@ -84,20 +90,21 @@ export const makePgn = (game: Game) => {
   return `[FEN "${game.start}"]` + "\n \n" + game.moves;
 }
 
-export const makeUpdatePayload = (board: any, greedy: boolean = false, fromOpponent: boolean = false) => {
-  const history = board.history || [];
+export const makeUpdatePayload = (board: any, greedy: boolean = false, fromOpponent: boolean = false, error: string | null = null) => {
+  const history = board.history as HistoryEntry[] || [];
   const startFen = board.startFen || START_FEN;
 
   const moves = getMovesFromPgn(board, startFen);
   const fen = makeFen(board.toSetup());
-  const lastMove = (history.length === 0) ? "" : makeUci(history[history.length - 1]);
+  const lastMove = (history.length === 0) ? "" : makeUci(history[history.length - 1].move);
 
   const payload = {
     "moves": moves,
     "fen": fen,
     "lastMove": lastMove,
     "greedy": greedy,
-    "fromOpponent": fromOpponent
+    "fromOpponent": fromOpponent,
+    "error": error
   }
 
   return payload
@@ -107,7 +114,7 @@ export const makeBoard = (game: Game): any => {
   const setup = parseFen(game.start).unwrap();
   const board: any = Chess.fromSetup(setup).unwrap();
   board.startFen = game.start;
-  board.history = [];
+  board.history = [] as HistoryEntry[];
 
   const updateFromHistory = () => {
     const freshSetup = parseFen(board.startFen).unwrap();
@@ -119,14 +126,14 @@ export const makeBoard = (game: Game): any => {
     board.halfmoves = freshBoard.halfmoves;
     board.fullmoves = freshBoard.fullmoves;
 
-    board.history.forEach((m: any) => board.play(m));
+    board.history.forEach((entry: HistoryEntry) => board.play(entry.move));
   };
 
   board.playSan = (san: string) => {
     const move = parseSan(board, san);
     if (move) {
-      (move as any).san = san;
-      board.history.push(move);
+      const entry: HistoryEntry = { move: move as Uci, san };
+      board.history.push(entry);
       board.play(move);
       return move;
     }
@@ -137,8 +144,8 @@ export const makeBoard = (game: Game): any => {
     const move = parseUci(uci);
     if (move) {
       const san = makeSan(board, move);
-      (move as any).san = san;
-      board.history.push(move);
+      const entry: HistoryEntry = { move, san };
+      board.history.push(entry);
       board.play(move);
       return move;
     }
@@ -165,6 +172,7 @@ export const {
   gameSetMoves, gameResetMoves,
   gameSetFen, gameResetFen,
   gameSetStart, gameResetStart,
-  gameSetLastMove, gameResetLastMove, gameUpdate
+  gameSetLastMove, gameResetLastMove,
+  gameUpdate, gameSetError
 } = gameSlice.actions
 export default gameSlice.reducer

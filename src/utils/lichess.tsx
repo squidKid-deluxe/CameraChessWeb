@@ -170,7 +170,7 @@ export const lichessPlayMove = (token: string, gameId: string, move: string) => 
   const options = {
     method: "POST"
   }
-  fetchResponse(token, path, options);
+  return fetchResponse(token, path, options);
 }
 
 export const lichessTrySetUser = async (navigate: NavigateFunction, dispatch: Dispatch<UnknownAction>) => {
