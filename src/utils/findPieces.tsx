@@ -220,7 +220,6 @@ export const findPieces = (modelRef: any, videoRef: any, canvasRef: any,
           boardRef.current.playSan(move);
           possibleMoves.clear();
           greedyMoveToTime = {};
-          state = zeros(64, 12);
         }
       }
 
@@ -237,7 +236,6 @@ export const findPieces = (modelRef: any, videoRef: any, canvasRef: any,
         if (hasGreedyMove) {
           boardRef.current.playSan(move);
           greedyMoveToTime = { greedyMove: greedyMoveToTime[move] };
-          state = zeros(64, 12);
         }
       }
 
